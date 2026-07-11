@@ -1,0 +1,23 @@
+{
+  "name": "api_json",
+  "version": "1.0.0",
+  "description": "Projeto de estudo focado na arquitetura e organização de uma API inspirada em padrões profissionais de desenvolvimento back-end, aplicando boas práticas como modularização, separação de responsabilidades, uso de controllers, services, rotas, tratamento de erros e estrutura escalável para manutenção e crescimento do sistema.",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
+    "zod": "^4.4.3"
+  }
+}
