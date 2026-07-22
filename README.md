@@ -27,6 +27,8 @@ A API foi construida com Node.js, Express e SQLite. Ela permite criar, listar, b
 17. [Pontos de atencao](#17-pontos-de-atencao)
 18. [Melhorias futuras](#18-melhorias-futuras)
 19. [Resumo academico](#19-resumo-academico)
+20. [Documentacao Swagger/OpenAPI](#20-documentacao-swaggeropenapi)
+21. [Docker e Docker Compose](#21-docker-e-docker-compose)
 
 ---
 
@@ -69,6 +71,9 @@ O projeto utiliza as seguintes tecnologias:
 | cors | Controle de acesso entre diferentes origens |
 | helmet | Cabecalhos de seguranca HTTP |
 | express-rate-limit | Limite de requisicoes por periodo |
+| swagger-jsdoc | Gera a especificacao OpenAPI a partir de comentarios JSDoc nas rotas |
+| swagger-ui-express | Serve a interface interativa do Swagger UI em `/api-docs` |
+| Docker / Docker Compose | Empacota e executa a aplicacao em container, com persistencia via volume |
 
 Trecho importante do `package.json`:
 
@@ -106,6 +111,7 @@ Estrutura_de_API_Persistencia_SQL/
 |   |   |-- cors.js
 |   |   |-- env.js
 |   |   |-- rateLimit.js
+|   |   |-- swagger.js
 |   |
 |   |-- controllers/
 |   |   |-- TaskControll.js
@@ -136,11 +142,16 @@ Estrutura_de_API_Persistencia_SQL/
 |   |
 |   |-- utils/
 |       |-- AppError.js
+|       |-- getNetworkIp.js
 |
 |-- package.json
 |-- package-lock.json
 |-- README.md
 |-- .gitignore
+|-- .env_model
+|-- Dockerfile
+|-- .dockerignore
+|-- docker-compose.yml
 ```
 
 Observacao sobre nome:
@@ -984,3 +995,291 @@ Tabela final de responsabilidades:
 Conclusao:
 
 Esta API e um bom exemplo de como organizar um projeto Back-end em camadas. Mesmo sendo pequena, ela ja apresenta conceitos importantes usados em projetos reais: modularizacao, persistencia SQL, validacao, middlewares, tratamento centralizado de erros e separacao de responsabilidades.
+
+---
+
+## 20. Documentacao Swagger/OpenAPI
+
+A API conta com documentacao interativa gerada automaticamente a partir de comentarios JSDoc escritos diretamente nos arquivos de rota.
+
+### Bibliotecas envolvidas
+
+| Biblioteca | Funcao |
+|---|---|
+| `swagger-jsdoc` | Le os comentarios `@swagger` em `src/routes/*.js` e monta a especificacao OpenAPI 3.0 em JSON |
+| `swagger-ui-express` | Serve essa especificacao como uma pagina HTML interativa |
+
+### Arquivo de configuracao
+
+Arquivo:
+
+```text
+src/config/swagger.js
+```
+
+```js
+import swaggerJsdoc from "swagger-jsdoc";
+import env from "../config/env.js";
+
+const host = env.IP; // IP interno da maquina, usado para acesso via rede local
+
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API de Tasks',
+      version: '1.0.0',
+      description: 'API de estudo para gerenciamento de tarefas'
+    },
+    servers: [{ url: `http://${host}:3000` }],
+    components: {
+        securitySchemes: {
+            bearerAuth: {
+                type: 'http',
+                scheme: 'bearer'
+            }
+        }
+    }
+  },
+  apis: ['./src/routes/*.js']
+};
+
+export default swaggerJsdoc(options);
+```
+
+Pontos importantes:
+
+- `servers` define contra qual host o Swagger UI vai testar as requisicoes. O valor vem de `env.IP`, uma variavel de ambiente com o IP interno da maquina, o que permite que colegas na mesma rede local abram o `/api-docs` e testem os endpoints pelo IP, nao so por `localhost`.
+- `components.securitySchemes.bearerAuth` declara o esquema de autenticacao Bearer usado pelas rotas protegidas. Ele e referenciado depois, em cada rota, com `security: [{ bearerAuth: [] }]`.
+- `apis` aponta para os arquivos onde o `swagger-jsdoc` deve procurar pelos comentarios `@swagger`.
+
+### Registro no Express
+
+Em `src/app.js`, a documentacao e servida antes de qualquer outro middleware:
+
+```js
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+```
+
+Isso disponibiliza a interface interativa em:
+
+```text
+http://localhost:3000/api-docs
+```
+
+ou, quando acessada por outra maquina na mesma rede:
+
+```text
+http://<IP-da-maquina>:3000/api-docs
+```
+
+### Comentarios `@swagger` nas rotas
+
+Cada rota em `src/routes/TaskRoute.js` tem um bloco de comentario logo acima dela, descrevendo metodo, parametros, corpo esperado, seguranca e respostas possiveis. Exemplo da rota de criacao:
+
+```js
+/**
+ * @swagger
+ * /tasks:
+ *   post:
+ *     summary: Cria uma tarefa no banco de dados
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *          application/json:
+ *            schema:
+ *              type: object
+ *              properties:
+ *                title:
+ *                  type: string
+ *              required:
+ *                - title
+ *     responses:
+ *       201:
+ *         description: Quando a tarefa e criada com sucesso
+ *       400:
+ *         description: Erro de validacao (titulo ausente ou vazio)
+ *       401:
+ *         description: Erro quando o token nao e enviado ou esta invalido
+ */
+route.post("/", authMiddleware, validationMiddleware, TaskControll.handleCreate.bind(TaskControll));
+```
+
+Estrutura geral de um comentario `@swagger`, por partes:
+
+| Chave | Serve para |
+|---|---|
+| `summary` | Titulo curto do endpoint, exibido na lista do Swagger UI |
+| `parameters` | Parametros de path/query (ex: `id` em `/tasks/{id}`) |
+| `requestBody` | Formato do corpo esperado (usado em `POST` e `PUT`) |
+| `security` | Marca a rota como protegida por `bearerAuth`, exibindo o cadeado na interface |
+| `responses` | Lista de status HTTP possiveis e o que cada um significa |
+
+Resumo de cobertura por rota:
+
+| Metodo | Endpoint | Documenta `security` | Documenta `requestBody` | Status documentados |
+|---|---|---:|---:|---|
+| GET | `/tasks` | Nao | Nao | 200 |
+| GET | `/tasks/{id}` | Nao | Nao | 200, 400, 404 |
+| POST | `/tasks` | Sim | Sim | 201, 400, 401 |
+| PUT | `/tasks/{id}` | Sim | Sim | 200, 400, 401, 404 |
+| DELETE | `/tasks/{id}` | Sim | Nao | 204, 400, 401, 404 |
+
+Ponto de atencao ja conhecido do projeto: como o `authMiddleware` valida apenas o formato do header (`Bearer <token>`), sem checar a validade real do token, o cadeado do Swagger UI representa a exigencia de formato, e nao uma autenticacao verdadeira.
+
+### Sintaxe YAML: cuidado com a indentacao
+
+Os comentarios `@swagger` sao escritos em YAML dentro do bloco JSDoc. Alguns pontos que exigem atencao, ja encontrados durante o desenvolvimento:
+
+- Parametros de path no formato OpenAPI usam chaves, `/tasks/{id}`, e nao dois-pontos como no Express (`/tasks/:id`).
+- Todos os itens de um mesmo nivel (por exemplo, as chaves `200`, `400`, `401` dentro de `responses`) precisam comecar exatamente na mesma coluna de indentacao. Um espaco a mais ou a menos gera erro do tipo `YAMLSyntaxError: All collection items must start at the same column`.
+
+---
+
+## 21. Docker e Docker Compose
+
+O projeto pode ser executado dentro de um container Docker, com o banco SQLite persistido atraves de um volume nomeado.
+
+### Dockerfile
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install --omit=dev
+
+COPY . .
+
+CMD ["npm","start"]
+```
+
+Passo a passo:
+
+1. Usa a imagem `node:20-alpine` como base.
+2. Define `/app` como diretorio de trabalho dentro do container.
+3. Copia apenas os arquivos de dependencias primeiro (`package*.json`), para aproveitar o cache de camadas do Docker quando o codigo muda mas as dependencias nao.
+4. Instala as dependencias de producao com `npm install --omit=dev`.
+5. Copia o restante do codigo-fonte.
+6. Define o comando de inicializacao como `npm start`, que executa `node src/server.js`.
+
+### docker-compose.yml
+
+```yaml
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    volumes:
+      - db-data:/app/src/database
+
+volumes:
+  db-data:
+```
+
+Pontos importantes:
+
+- `ports: "3000:3000"` mapeia a porta 3000 do container para a porta 3000 da maquina host, em todas as interfaces de rede (`0.0.0.0`), permitindo acesso tanto por `localhost` quanto pelo IP da maquina na rede local.
+- `volumes: db-data:/app/src/database` monta um volume nomeado sobre a pasta `src/database` dentro do container. Isso garante que o arquivo `db.sqlite` sobreviva a recriacoes do container (`docker compose up --build`), evitando perda de dados a cada rebuild.
+- `environment: PORT=3000` injeta a variavel de ambiente lida por `src/config/env.js`.
+
+### .dockerignore
+
+```text
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+```
+
+Evita copiar `node_modules` do host para dentro da imagem (binarios nativos compilados no Windows nao rodam no Linux do container) e evita copiar arquivos irrelevantes para a execucao.
+
+### Variaveis de ambiente (.env_model)
+
+```text
+IP=#IP interno da maquina da interface Ethernet
+PORT=#Porta que vai ser usada para ser escutada
+```
+
+Esse arquivo serve como modelo do `.env` real (que fica fora do controle de versao, conforme `.gitignore`). As duas variaveis sao:
+
+| Variavel | Uso |
+|---|---|
+| `PORT` | Porta em que o Express escuta, lida em `src/config/env.js` |
+| `IP` | IP interno da maquina na rede local, usado em `src/config/swagger.js` para montar a URL de `servers`, permitindo que o Swagger UI seja testado por outras maquinas da mesma rede |
+
+O IP correto pode ser obtido com `ipconfig` (Windows) ou, de forma programatica, com a funcao utilitaria descrita a seguir.
+
+### Utilitario para obter o IP da maquina
+
+Arquivo:
+
+```text
+src/utils/getNetworkIp.js
+```
+
+```js
+import os from 'node:os';
+
+export default function obterIpLocal() {
+    const interfaces = os.networkInterfaces();
+
+    for (const nome in interfaces) {
+        for (const detalhe of interfaces[nome]) {
+            if (detalhe.family === 'IPv4' && !detalhe.internal) {
+                return { interface: nome, ip: detalhe.address };
+            }
+        }
+    }
+    return null;
+}
+```
+
+Essa funcao percorre todas as interfaces de rede do sistema operacional e retorna o primeiro endereco IPv4 nao-interno encontrado, junto com o nome da interface correspondente (util para diferenciar Wi-Fi, Ethernet e adaptadores virtuais criados por VPNs, maquinas virtuais ou pelo proprio Docker Desktop).
+
+### CORS liberado para a rede local
+
+Para permitir que colegas em outras maquinas da mesma rede acessem a API a partir de um front-end no navegador, o `cors.js` foi ajustado:
+
+```js
+const CorsOPTIONS = {
+    origin: "*"
+}
+export default CorsOPTIONS;
+```
+
+Ponto de atencao: `origin: "*"` libera requisicoes de **qualquer** origem, nao apenas da rede local. Isso e aceitavel para um ambiente de estudo/teste, mas nao e recomendado para uma API em producao com autenticacao real, ja que amplia a superficie de exposicao da aplicacao a sites de fora da rede.
+
+### Como executar
+
+```bash
+docker compose up --build
+```
+
+Depois de subir, a API fica disponivel em:
+
+```text
+http://localhost:3000/tasks
+http://localhost:3000/api-docs
+```
+
+E, para outras maquinas na mesma rede local, atraves do IP configurado:
+
+```text
+http://<IP-da-maquina>:3000/tasks
+http://<IP-da-maquina>:3000/api-docs
+```
+
+Para verificar se o container esta rodando e qual porta esta exposta:
+
+```bash
+docker compose ps
+```
