@@ -149,7 +149,7 @@ Estrutura_de_API_Persistencia_SQL/
 |-- README.md
 |-- .gitignore
 |-- .env_model
-|-- Dockerfile
+|-- dockerfile
 |-- .dockerignore
 |-- docker-compose.yml
 ```
@@ -1140,7 +1140,7 @@ Os comentarios `@swagger` sao escritos em YAML dentro do bloco JSDoc. Alguns pon
 
 O projeto pode ser executado dentro de um container Docker, com o banco SQLite persistido atraves de um volume nomeado.
 
-### Dockerfile
+### dockerfile
 
 ```dockerfile
 FROM node:20-alpine
@@ -1193,7 +1193,7 @@ Pontos importantes:
 ```text
 node_modules
 npm-debug.log
-Dockerfile
+dockerfile
 .dockerignore
 .git
 ```
