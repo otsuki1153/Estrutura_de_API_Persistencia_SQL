@@ -1,4 +1,4 @@
 const CorsOPTIONS = {
-    origin: "http://localhost:3000" 
+    origin: "*" 
 }
 export default CorsOPTIONS;
