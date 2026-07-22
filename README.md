@@ -931,10 +931,8 @@ O arquivo `TaskControll.js` poderia ser renomeado para `TaskController.js` para 
 Sugestoes para evoluir o projeto:
 
 - Corrigir codificacao dos arquivos para UTF-8.
-- Criar arquivo `.env.example`.
 - Implementar autenticacao real com JWT.
 - Adicionar testes automatizados.
-- Criar documentacao Swagger/OpenAPI.
 - Adicionar campo `completed` na tabela `tasks`.
 - Adicionar campos `createdAt` e `updatedAt`.
 - Criar paginacao em `GET /tasks`.
